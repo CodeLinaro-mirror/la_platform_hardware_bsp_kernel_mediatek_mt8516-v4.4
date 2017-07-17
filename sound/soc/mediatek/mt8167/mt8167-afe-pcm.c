@@ -970,11 +970,11 @@ static int mt8167_afe_2nd_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct mtk_afe *afe = snd_soc_platform_get_drvdata(rtd->platform);
 	unsigned int width_val = params_width(params) > 16 ?
-		(AFE_CONN_24BIT_O01 | AFE_CONN_24BIT_O02) : 0;
+		(AFE_CONN_24BIT_O00 | AFE_CONN_24BIT_O01) : 0;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		regmap_update_bits(afe->regmap, AFE_CONN_24BIT,
-			   AFE_CONN_24BIT_O01 | AFE_CONN_24BIT_O02, width_val);
+			   AFE_CONN_24BIT_O00 | AFE_CONN_24BIT_O01, width_val);
 
 	return 0;
 }
@@ -1333,7 +1333,7 @@ static int mt8167_afe_hdmi_prepare(struct snd_pcm_substream *substream,
 	struct mt8167_afe_be_dai_data *be = &afe->be_data[dai->id - MT8167_AFE_BACKEND_BASE];
 	const unsigned int rate = runtime->rate;
 	const unsigned int channels = runtime->channels;
-	const int bit_width = snd_pcm_format_width(runtime->format);
+	const int bit_width = dai->sample_bits;
 	const unsigned int stream = substream->stream;
 	unsigned int val;
 	unsigned int bck_inverse = 0;
@@ -1739,6 +1739,9 @@ static int mt8167_afe_dais_startup(struct snd_pcm_substream *substream,
 	int ret;
 
 	dev_dbg(afe->dev, "%s %s\n", __func__, memif->data->name);
+
+	snd_pcm_hw_constraint_step(substream->runtime, 0,
+		SNDRV_PCM_HW_PARAM_BUFFER_BYTES, memif->data->buffer_align_bytes);
 
 	snd_soc_set_runtime_hwparams(substream, &mt8167_afe_hardware);
 
@@ -2375,6 +2378,47 @@ static struct snd_soc_dai_driver *mt8167_afe_get_dai_drv_by_id(unsigned int id)
 	return NULL;
 }
 
+static int mt8167_afe_set_memif_irq_by_mode(struct mt8167_afe_memif_data *data,
+	unsigned int mode)
+{
+	int ret = 0;
+
+	if (data == NULL)
+		return -EINVAL;
+
+	switch (mode) {
+	case MT8167_AFE_IRQ_1:
+		data->irq_reg_cnt = AFE_IRQ_CNT1;
+		data->irq_cnt_shift = 0;
+		data->irq_mode = MT8167_AFE_IRQ_1;
+		data->irq_fs_reg = AFE_IRQ_MCU_CON;
+		data->irq_fs_shift = 4;
+		data->irq_clr_shift = 0;
+		break;
+	case MT8167_AFE_IRQ_2:
+		data->irq_reg_cnt = AFE_IRQ_CNT2;
+		data->irq_cnt_shift = 0;
+		data->irq_mode = MT8167_AFE_IRQ_2;
+		data->irq_fs_reg = AFE_IRQ_MCU_CON;
+		data->irq_fs_shift = 8;
+		data->irq_clr_shift = 1;
+		break;
+	case MT8167_AFE_IRQ_7:
+		data->irq_reg_cnt = AFE_IRQ_CNT7;
+		data->irq_cnt_shift = 0;
+		data->irq_mode = MT8167_AFE_IRQ_7;
+		data->irq_fs_reg = AFE_IRQ_MCU_CON;
+		data->irq_fs_shift = 24;
+		data->irq_clr_shift = 6;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 static const struct snd_kcontrol_new mt8167_afe_o00_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I05 Switch", AFE_CONN0, 5, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("I07 Switch", AFE_CONN0, 7, 1, 0),
@@ -2708,7 +2752,7 @@ static const char *aud_clks[MT8167_CLK_NUM] = {
 };
 #endif
 
-static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
+static struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 	{
 		.name = "DL1",
 		.id = MT8167_AFE_MEMIF_DL1,
@@ -2730,6 +2774,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 16,
 		.conn_format_mask = -1,
 		.prealloc_size = 128 * 1024,
+		.buffer_align_bytes = 16,
 	}, {
 		.name = "DL2",
 		.id = MT8167_AFE_MEMIF_DL2,
@@ -2751,6 +2796,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 18,
 		.conn_format_mask = -1,
 		.prealloc_size = 128 * 1024,
+		.buffer_align_bytes = 16,
 	}, {
 		.name = "VUL",
 		.id = MT8167_AFE_MEMIF_VUL,
@@ -2772,6 +2818,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 22,
 		.conn_format_mask = AFE_CONN_24BIT_O09 | AFE_CONN_24BIT_O10,
 		.prealloc_size = 32 * 1024,
+		.buffer_align_bytes = 8,
 	}, {
 		.name = "DAI",
 		.id = MT8167_AFE_MEMIF_DAI,
@@ -2793,6 +2840,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 24,
 		.conn_format_mask = -1,
 		.prealloc_size = 16 * 1024,
+		.buffer_align_bytes = 8,
 	}, {
 		.name = "AWB",
 		.id = MT8167_AFE_MEMIF_AWB,
@@ -2814,6 +2862,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 20,
 		.conn_format_mask = AFE_CONN_24BIT_O05 | AFE_CONN_24BIT_O06,
 		.prealloc_size = 0,
+		.buffer_align_bytes = 8,
 	}, {
 		.name = "MOD_DAI",
 		.id = MT8167_AFE_MEMIF_MOD_DAI,
@@ -2835,6 +2884,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 26,
 		.conn_format_mask = -1,
 		.prealloc_size = 0,
+		.buffer_align_bytes = 8,
 	}, {
 		.name = "HDMI",
 		.id = MT8167_AFE_MEMIF_HDMI,
@@ -2856,6 +2906,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 28,
 		.conn_format_mask = -1,
 		.prealloc_size = 0,
+		.buffer_align_bytes = 16,
 	}, {
 		.name = "TDM_IN",
 		.id = MT8167_AFE_MEMIF_TDM_IN,
@@ -2877,6 +2928,7 @@ static const struct mt8167_afe_memif_data memif_data[MT8167_AFE_MEMIF_NUM] = {
 		.format_shift = 4,
 		.conn_format_mask = -1,
 		.prealloc_size = 0,
+		.buffer_align_bytes = 8,
 	},
 };
 
@@ -3001,6 +3053,7 @@ static int mt8167_afe_pcm_dev_probe(struct platform_device *pdev)
 	struct mtk_afe *afe;
 	struct resource *res;
 	struct device_node *np = pdev->dev.of_node;
+	unsigned int irq_mode;
 
 	afe = devm_kzalloc(&pdev->dev, sizeof(*afe), GFP_KERNEL);
 	if (!afe)
@@ -3085,6 +3138,20 @@ static int mt8167_afe_pcm_dev_probe(struct platform_device *pdev)
 			drv->symmetric_rates = 1;
 			drv->symmetric_samplebits = 1;
 		}
+	}
+
+	if (!of_property_read_u32(np, "mediatek,awb-irq-mode", &irq_mode) &&
+	    (irq_mode != memif_data[MT8167_AFE_MEMIF_AWB].irq_mode)) {
+		if (!mt8167_afe_set_memif_irq_by_mode(&memif_data[MT8167_AFE_MEMIF_AWB],
+		                                      irq_mode))
+			afe->awb_irq_mode = irq_mode;
+	}
+
+	if (!of_property_read_u32(np, "mediatek,dai-irq-mode", &irq_mode) &&
+	    (irq_mode != memif_data[MT8167_AFE_MEMIF_DAI].irq_mode)) {
+		if (!mt8167_afe_set_memif_irq_by_mode(&memif_data[MT8167_AFE_MEMIF_DAI],
+		                                      irq_mode))
+			afe->dai_irq_mode = irq_mode;
 	}
 
 	ret = snd_soc_register_platform(&pdev->dev, &mt8167_afe_pcm_platform);

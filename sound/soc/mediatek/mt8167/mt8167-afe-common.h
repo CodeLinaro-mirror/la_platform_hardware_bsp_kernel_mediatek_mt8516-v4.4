@@ -166,6 +166,7 @@ struct mt8167_afe_memif_data {
 	int format_shift;
 	int conn_format_mask;
 	int prealloc_size;
+	unsigned long buffer_align_bytes;
 };
 
 struct mt8167_afe_be_dai_data {
@@ -212,6 +213,8 @@ struct mtk_afe {
 	int apll_tuner_ref_cnt[MT8167_AFE_APLL_NUM];
 	unsigned int tdm_out_mode;
 	unsigned int i2s_clk_modes[MT8167_AFE_I2S_SETS];
+	unsigned int awb_irq_mode;
+	unsigned int dai_irq_mode;
 	/* locks */
 	spinlock_t afe_ctrl_lock;
 	struct mutex afe_clk_mutex;
