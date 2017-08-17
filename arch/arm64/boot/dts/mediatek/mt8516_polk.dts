@@ -64,8 +64,10 @@
 		compatible = "mediatek,mt8167-sdio";
 		reg = <0 0x11130000 0 0x1000>;
 		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_LOW>;
-		clocks = <&topckgen CLK_TOP_MSDC1>;
-		clock-names = "sdio-clock";
+		clocks = <&topckgen CLK_TOP_MSDC1>,
+			 <&topckgen CLK_TOP_AHB_INFRA_SEL>,
+			 <&topckgen CLK_TOP_MSDC1_INFRA>;
+		clock-names = "sdio-bus", "sdio-src", "sdio-src-cg";
 		status = "disabled";
 	};
 
@@ -305,6 +307,14 @@
 };
 
 &mt6392_vcamaf_reg {
+	regulator-always-on;
+};
+
+&mt6392_vmch_reg {
+	regulator-always-on;
+};
+
+&mt6392_vmc_reg {
 	regulator-always-on;
 };
 
@@ -599,16 +609,6 @@ pwm_goio_def_cfg: pwmdefault {
 	};
 /* Connectivity GPIO end */
 
-	spi_pins_a: spi {
-		pins_spi {
-			pinmux = <MT8167_PIN_3_EINT3__FUNC_SPI_MI>,
-				 <MT8167_PIN_51_SPI_MO__FUNC_SPI_MO>,
-				 <MT8167_PIN_5_EINT5__FUNC_SPI_CSB>,
-				 <MT8167_PIN_6_EINT6__FUNC_SPI_CLK>;
-			bias-disable;
-		};
-	};
-
 /* USB GPIO start */
 	usb0_drvvbus: drvvbus_init {
 		pins_cmd_dat {
@@ -653,18 +653,6 @@ pwm_goio_def_cfg: pwmdefault {
 &ptp_od {
 	vproc-supply = <&mt6392_vproc_reg>;
 	vcore-supply = <&mt6392_vcore_reg>;
-};
-
-&spi {
-	pinctrl-names = "default";
-	pinctrl-0 = <&spi_pins_a>;
-	status = "okay";
-
-	spidev: spidev@0 {
-		compatible = "linux,spidev";
-		reg = <0>;
-		spi-max-frequency = <1000000>;
-	};
 };
 
 &uart0 {
