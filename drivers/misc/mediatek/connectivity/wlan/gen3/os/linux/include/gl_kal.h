@@ -629,7 +629,8 @@ struct KAL_HALT_CTRL_T {
 #define kalGetTimeTick()                            jiffies_to_msecs(jiffies)
 
 #define WLAN_TAG                                    "[wlan]"
-#define kalPrint(_Fmt...)                           pr_debug(WLAN_TAG _Fmt)
+#define kalPrint(_Fmt...)                           pr_err(WLAN_TAG _Fmt)
+#define kalPrintLimited(_Fmt...)                     pr_info_ratelimited(WLAN_TAG _Fmt)
 
 #define kalBreakPoint() \
 do { \
@@ -911,6 +912,10 @@ BOOLEAN kalWSCGetActiveState(IN P_GLUE_INFO_T prGlueInfo);
 VOID
 kalUpdateRSSI(IN P_GLUE_INFO_T prGlueInfo,
 	      IN ENUM_KAL_NETWORK_TYPE_INDEX_T eNetTypeIdx, IN INT_8 cRssi, IN INT_8 cLinkQuality);
+
+VOID
+kalUpdateNoise(IN P_GLUE_INFO_T prGlueInfo,
+	      IN ENUM_KAL_NETWORK_TYPE_INDEX_T eNetTypeIdx, IN INT_8 cNoise);
 
 /*----------------------------------------------------------------------------*/
 /* I/O Buffer Pre-allocation                                                  */
